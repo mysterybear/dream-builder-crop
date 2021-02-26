@@ -1,27 +1,15 @@
-import { useSpring, to, animated } from "@react-spring/web"
-import clsx from "clsx"
+import { animated, to, useSpring } from "@react-spring/web"
 import produce from "immer"
-import React, { Dispatch, Fragment, HTMLProps, SetStateAction } from "react"
+import React, { Dispatch, Fragment, SetStateAction, useRef } from "react"
 import { useDrag } from "react-use-gesture"
 import { GestureState } from "react-use-gesture/dist/types"
-import { CROP_MINIMUM_PX } from "../lib/constants"
+import { CROP_MINIMUM_PX, INSET_0 } from "../lib/constants"
 import { clamp } from "../lib/util"
 import { ImageT, InsetT } from "../types"
+import Handle from "./Handle"
 import ImageBase from "./Image"
 
 const Image = animated(ImageBase)
-
-const Handle = animated(
-  ({ className, style, ...props }: HTMLProps<HTMLDivElement>) => {
-    return (
-      <div
-        className={clsx("absolute bg-red-500", className)}
-        style={{ width: 1, height: 1, ...style }}
-        {...props}
-      />
-    )
-  }
-)
 
 type CropperProps = {
   image: ImageT
@@ -29,6 +17,9 @@ type CropperProps = {
 }
 
 const Cropper = ({ image, image: { inset }, setImage }: CropperProps) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const imageContainerRef = useRef<HTMLDivElement>(null)
+
   const [{ t, r, b, l }, set] = useSpring(() => ({
     ...inset,
     config: {
@@ -53,9 +44,55 @@ const Cropper = ({ image, image: { inset }, setImage }: CropperProps) => {
     if (up) setImage((p: ImageT) => ({ ...p, inset: next }))
   })
 
+  const executeCrop = () => {
+    const ctx = canvasRef.current?.getContext("2d")
+    const img: HTMLImageElement = imageContainerRef.current?.querySelector(
+      'img:not([role="presentation"])'
+    )
+    if (!ctx || !img) return
+
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+
+    const crop = {
+      width: image.width - (inset.l + inset.r),
+      height: image.height - (inset.t + inset.b),
+      left: image.left + inset.l,
+      top: image.top + inset.t,
+    }
+
+    ctx.canvas.width = crop.width
+    ctx.canvas.height = crop.height
+
+    const scale = img.naturalWidth / image.width
+
+    const { sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight } = {
+      sx: scale * inset.l,
+      sy: scale * inset.t,
+      sWidth: scale * crop.width,
+      sHeight: scale * crop.height,
+      dx: 0,
+      dy: 0,
+      dWidth: crop.width,
+      dHeight: crop.height,
+    }
+
+    ctx.drawImage(img, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight)
+    const newImage = ctx.canvas.toDataURL("image/png")
+    setImage((p) => ({
+      ...p,
+      width: crop.width,
+      height: crop.height,
+      left: crop.left,
+      top: crop.top,
+      src: newImage,
+      inset: INSET_0,
+    }))
+    set(INSET_0)
+  }
+
   return (
     <Fragment>
-      <Image image={image} />
+      <Image image={image} ref={imageContainerRef} />
       <div
         className="absolute bg-black opacity-50"
         style={{
@@ -66,7 +103,7 @@ const Cropper = ({ image, image: { inset }, setImage }: CropperProps) => {
         }}
       />
       <Image image={image} style={{ clipPath }} />
-      <Handle // crop top
+      <Handle // top
         style={{
           top: image.top,
           left: image.left + image.width / 2,
@@ -81,7 +118,7 @@ const Cropper = ({ image, image: { inset }, setImage }: CropperProps) => {
           })
         )}
       />
-      <Handle // crop right
+      <Handle // right
         style={{
           top: image.top + image.height / 2,
           left: image.left + image.width,
@@ -96,7 +133,7 @@ const Cropper = ({ image, image: { inset }, setImage }: CropperProps) => {
           })
         )}
       />
-      <Handle // crop bottom
+      <Handle // bottom
         style={{
           top: image.top + image.height,
           left: image.left + image.width / 2,
@@ -111,7 +148,7 @@ const Cropper = ({ image, image: { inset }, setImage }: CropperProps) => {
           })
         )}
       />
-      <Handle // crop left
+      <Handle // left
         style={{
           top: image.top + image.height / 2,
           left: image.left,
@@ -126,7 +163,7 @@ const Cropper = ({ image, image: { inset }, setImage }: CropperProps) => {
           })
         )}
       />
-      <Handle // move centre
+      <Handle // centre
         style={{
           top: image.top + image.height / 2,
           left: image.left + image.width / 2,
@@ -155,7 +192,15 @@ const Cropper = ({ image, image: { inset }, setImage }: CropperProps) => {
           })
         )}
       />
+      <button onClick={executeCrop}>crop</button>
+      <canvas
+        className="hidden"
+        ref={canvasRef}
+        width={image.width}
+        height={image.height}
+      />
     </Fragment>
   )
 }
+
 export default Cropper

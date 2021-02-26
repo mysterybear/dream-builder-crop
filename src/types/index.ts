@@ -10,7 +10,5 @@ export type ImageT = {
   height: number
   top: number
   left: number
-  naturalWidth: number
-  naturalHeight: number
   inset: InsetT
 }
