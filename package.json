@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next dev"
   },
   "dependencies": {
     "@react-spring/web": "9.0.0-rc.3",
